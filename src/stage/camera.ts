@@ -47,6 +47,7 @@ export class Camera {
             size: this.uniforms.buffer.byteLength,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
+        this.populateCameraBuffer();
 
         this.projMat = mat4.perspective(toRadians(fovYDegrees), aspectRatio, Camera.nearPlane, Camera.farPlane);
 
@@ -59,6 +60,12 @@ export class Camera {
         canvas.addEventListener('mousedown', () => canvas.requestPointerLock());
         canvas.addEventListener('mouseup', () => document.exitPointerLock());
         canvas.addEventListener('mousemove', (event) => this.onMouseMove(event));
+    }
+
+    private populateCameraBuffer() {
+        // TODO-1.1: upload `this.uniforms.buffer` (host side) to `this.uniformsBuffer` (device side)
+        // check `lights.ts` for examples of using `device.queue.writeBuffer()`
+        device.queue.writeBuffer(this.uniformsBuffer, 0, this.uniforms.buffer);
     }
 
     private onKeyEvent(event: KeyboardEvent, down: boolean) {
