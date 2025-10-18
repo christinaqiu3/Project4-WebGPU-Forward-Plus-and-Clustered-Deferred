@@ -9,15 +9,85 @@
 //     - Convert these screen and depth bounds into view-space coordinates.
 //     - Store the computed bounding box (AABB) for the cluster.
 
-// ------------------------------------
-// Assigning lights to clusters:
-// ------------------------------------
-// For each cluster:
-//     - Initialize a counter for the number of lights in this cluster.
+@group(${bindGroup_scene}) @binding(0) var<uniform> cameraUniforms: CameraUniforms;
+@group(${bindGroup_scene}) @binding(1) var<storage, read> lightSet: LightSet;
+@group(${bindGroup_scene}) @binding(2) var<storage, read_write> clusterSet: ClusterSet;
 
-//     For each light:
-//         - Check if the light intersects with the cluster’s bounding box (AABB).
-//         - If it does, add the light to the cluster's light list.
-//         - Stop adding lights if the maximum number of lights is reached.
+// Unproject an NDC point (x,y,z in [-1,1]) to view space using invProj.
+fn screenToViewSpace(screenCoord: vec2<f32>, depthNDC: f32) -> vec3<f32> {
+    let ndcX = (screenCoord.x / cameraUniforms.canvasResolution.x) * 2.0 - 1.0;
+    let ndcY = 1.0 - (screenCoord.y / cameraUniforms.canvasResolution.y) * 2.0;
+    let ndc = vec4<f32>(ndcX, ndcY, depthNDC, 1.0);
+    var viewPos = cameraUniforms.invProjMat * ndc;
+    viewPos /= viewPos.w;
+    return viewPos.xyz;
+}
 
-//     - Store the number of lights assigned to this cluster.
+// Sphere-AABB intersection test (view-space)
+fn sphereIntersectsAABB(center: vec3<f32>, r: f32, aMin: vec3<f32>, aMax: vec3<f32>) -> bool {
+    let closest = clamp(center, aMin, aMax);
+    let distSq = dot(closest - center, closest - center);
+    return distSq <= r * r;
+}
+
+@compute
+@workgroup_size(8, 8, 1)
+fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+    // Cluster grid dimensions
+    let clusterDims = vec3<u32>(${numClustersX}, ${numClustersY}, ${numClustersZ});
+    if (gid.x >= clusterDims.x || gid.y >= clusterDims.y || gid.z >= clusterDims.z) {
+        return;
+    }
+
+    let clusterIdx: u32 = gid.x + gid.y * clusterDims.x + gid.z * clusterDims.x * clusterDims.y;
+
+    // Calculate screen-space bounds for this cluster
+    let x0 = f32(gid.x) / f32(clusterDims.x) * cameraUniforms.canvasResolution.x;
+    let x1 = f32(gid.x + 1u) / f32(clusterDims.x) * cameraUniforms.canvasResolution.x;
+    let y0 = f32(gid.y) / f32(clusterDims.y) * cameraUniforms.canvasResolution.y;
+    let y1 = f32(gid.y + 1u) / f32(clusterDims.y) * cameraUniforms.canvasResolution.y;
+
+    // Logarithmic depth slicing
+    let near = cameraUniforms.nearPlane;
+    let far  = cameraUniforms.farPlane;
+    let zSlice  = f32(gid.z) / f32(clusterDims.z);
+    let zSlice1 = f32(gid.z + 1u) / f32(clusterDims.z);
+    let zNear = -near * pow(far / near, zSlice);
+    let zFar  = -near * pow(far / near, zSlice1);
+
+    // Convert to view-space bounding box corners
+    let clusterMinNear = screenToViewSpace(vec2<f32>(x0, y0), -1.0);
+    let clusterMaxFar  = screenToViewSpace(vec2<f32>(x1, y1),  1.0);
+
+    let minBBox = vec3<f32>(
+        min(clusterMinNear.x, clusterMaxFar.x),
+        min(clusterMinNear.y, clusterMaxFar.y),
+        min(zNear, zFar)
+    );
+
+    let maxBBox = vec3<f32>(
+        max(clusterMinNear.x, clusterMaxFar.x),
+        max(clusterMinNear.y, clusterMaxFar.y),
+        max(zNear, zFar)
+    );
+
+    // Assign lights to this cluster
+    var counter: u32 = 0u;
+    for (var lightIdx: u32 = 0u; lightIdx < lightSet.numLights; lightIdx++) {
+        if (counter >= ${maxLightsPerCluster}u) {
+            break;
+        }
+
+        let light = lightSet.lights[lightIdx];
+        let lightPosView = (cameraUniforms.viewMat * vec4<f32>(light.pos, 1.0)).xyz;
+
+        if (sphereIntersectsAABB(lightPosView, ${lightRadius}, minBBox, maxBBox)) {
+            clusterSet.clusters[clusterIdx].lightIndices[counter] = lightIdx;
+            counter += 1u;
+        }
+    }
+
+    clusterSet.clusters[clusterIdx].numLights = counter;
+    clusterSet.clusters[clusterIdx].minAABB = minBBox;
+    clusterSet.clusters[clusterIdx].maxAABB = maxBBox;
+}

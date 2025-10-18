@@ -2,6 +2,20 @@
 
 // See naive.fs.wgsl for basic fragment shader setup; this shader should use light clusters instead of looping over all lights
 
+@group(${bindGroup_scene}) @binding(0) var<uniform> cameraUniforms: CameraUniforms;
+@group(${bindGroup_scene}) @binding(1) var<storage, read> lightSet: LightSet;
+@group(${bindGroup_scene}) @binding(2) var<storage, read> clusterSet: ClusterSet;
+@group(${bindGroup_material}) @binding(0) var diffuseTex: texture_2d<f32>;
+@group(${bindGroup_material}) @binding(1) var diffuseTexSampler: sampler;
+
+struct FragmentInput
+{
+    @location(0) pos: vec3f,
+    @location(1) nor: vec3f,
+    @location(2) uv: vec2f,
+    @location(3) fragCoord: vec4f
+}
+
 // ------------------------------------
 // Shading process:
 // ------------------------------------
@@ -14,3 +28,50 @@
 //     Add the calculated contribution to the total light accumulation.
 // Multiply the fragment’s diffuse color by the accumulated light contribution.
 // Return the final color, ensuring that the alpha component is set appropriately (typically to 1).
+
+@fragment
+fn main(in: FragmentInput) -> @location(0) vec4f
+{
+    let diffuseColor = textureSample(diffuseTex, diffuseTexSampler, in.uv);
+    if (diffuseColor.a < 0.5f) {
+        discard;
+    }
+
+    // Determine cluster index based on fragment coordinates
+    let clusterX = ${numClustersX}u;
+    let clusterY = ${numClustersY}u;
+    let clusterZ = ${numClustersZ}u;
+
+    let screenPos = cameraUniforms.viewProjMat * vec4<f32>(in.pos, 1.0);
+    let ndcPos = screenPos.xyz / screenPos.w;
+
+    let viewPos = (cameraUniforms.viewMat * vec4<f32>(in.pos, 1.0)).xyz;
+
+    // Compute cluster indices
+    let cx = u32(clamp((ndcPos.x + 1.0) * 0.5 * f32(clusterX), 0.0, f32(clusterX - 1u)));
+    let cy = u32(clamp((ndcPos.y + 1.0) * 0.5 * f32(clusterY), 0.0, f32(clusterY - 1u)));
+    let cz = u32(clamp(log(abs(viewPos.z) / cameraUniforms.nearPlane) / log(cameraUniforms.farPlane / cameraUniforms.nearPlane) * f32(clusterZ), 0.0, f32(clusterZ - 1u)));
+
+    let clusterIndex = cx + cy * clusterX + cz * clusterX * clusterY;
+
+    // todo print the z slice to see if increasing
+
+    // Retrieve cluster data
+    let cluster = clusterSet.clusters[clusterIndex];
+    let numLightsInCluster = cluster.numLights;
+
+    var totalLightContrib = vec3f(0, 0, 0);
+    let nor = normalize(in.nor);
+    for (var i: u32 = 0u; i < numLightsInCluster; i = i + 1u) {
+        let lightIdx = cluster.lightIndices[i];
+        let light = lightSet.lights[lightIdx];
+        totalLightContrib += calculateLightContrib(light, in.pos, nor);
+    }
+
+    // let brightness = f32(cluster.numLights) / f32(${maxLightsPerCluster});
+
+    // return vec4<f32>(vec3<f32>(brightness), 1.0);
+
+    var finalColor = diffuseColor.rgb * totalLightContrib;
+    return vec4(finalColor, 1);
+}

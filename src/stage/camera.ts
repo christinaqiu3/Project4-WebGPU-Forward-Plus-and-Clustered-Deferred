@@ -14,6 +14,36 @@ class CameraUniforms {
     }
 
     // TODO-2: add extra functions to set values needed for light clustering here
+    set nearPlane(near: number) {
+        this.floatView[16] = near;
+    }
+    set farPlane(far: number) {
+        this.floatView[17] = far;
+    }
+    set invProjMat(mat: Float32Array) {
+        for (let i = 0; i < 16; i++) {
+            this.floatView[20 + i] = mat[i];
+        }
+    }
+    set viewMat(mat: Float32Array) {
+        for (let i = 0; i < 16; i++) {
+            this.floatView[36 + i] = mat[i];
+        }
+    }
+    set invViewMat(mat: Float32Array) {
+        for (let i = 0; i < 16; i++) {
+            this.floatView[52 + i] = mat[i];
+        }
+    }
+    set canvasResolution(res: [number, number]) {
+        this.floatView[68] = res[0];
+        this.floatView[69] = res[1];
+        // do i need to set an offset?
+    }
+
+    // set numClusters(numClusters: number) {
+    //     this.floatView[16] = numClusters;
+    // }
 }
 
 export class Camera {
@@ -44,12 +74,16 @@ export class Camera {
 
         this.uniformsBuffer = device.createBuffer({
             label: 'Camera Uniforms',
-            size: this.uniforms.buffer.byteLength,
+            size: 288,// this.uniforms.buffer.byteLength,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
         this.populateCameraBuffer();
 
         this.projMat = mat4.perspective(toRadians(fovYDegrees), aspectRatio, Camera.nearPlane, Camera.farPlane);
+        this.uniforms.nearPlane = Camera.nearPlane;
+        this.uniforms.farPlane = Camera.farPlane;
+        this.uniforms.invProjMat = mat4.invert(this.projMat);
+        this.uniforms.canvasResolution = [canvas.width, canvas.height];
 
         this.rotateCamera(0, 0); // set initial camera vectors
 
@@ -148,7 +182,9 @@ export class Camera {
         this.uniforms.viewProjMat = viewProjMat;
 
         // TODO-2: write to extra buffers needed for light clustering here
-
+        this.uniforms.viewMat = viewMat;
+        this.uniforms.invViewMat = mat4.invert(viewMat);
+        
         // TODO-1.1: upload `this.uniforms.buffer` (host side) to `this.uniformsBuffer` (device side)
         // check `lights.ts` for examples of using `device.queue.writeBuffer()`
         device.queue.writeBuffer(this.uniformsBuffer, 0, this.uniforms.buffer);
