@@ -14,8 +14,6 @@ struct LightSet {
 
 struct Cluster {
     numLights: u32,
-    minAABB: vec3<f32>,
-    maxAABB: vec3<f32>,
     lightIndices: array<u32, ${maxLightsPerCluster}>
 }
 

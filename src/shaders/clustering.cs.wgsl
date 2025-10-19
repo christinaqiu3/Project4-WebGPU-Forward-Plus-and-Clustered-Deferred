@@ -30,6 +30,12 @@ fn sphereIntersectsAABB(center: vec3<f32>, r: f32, aMin: vec3<f32>, aMax: vec3<f
     return distSq <= r * r;
 }
 
+fn lineIntersectionPlane(a: vec3f, b: vec3f, planeZ: f32) -> vec3f {
+    let ab = b - a;
+    let t = (planeZ - a.z) / ab.z;
+    return a + t * ab;
+}
+
 @compute
 @workgroup_size(8, 8, 1)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
@@ -52,12 +58,19 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let far  = cameraUniforms.farPlane;
     let zSlice  = f32(gid.z) / f32(clusterDims.z);
     let zSlice1 = f32(gid.z + 1u) / f32(clusterDims.z);
+
     let zNear = -near * pow(far / near, zSlice);
     let zFar  = -near * pow(far / near, zSlice1);
 
     // Convert to view-space bounding box corners
-    let clusterMinNear = screenToViewSpace(vec2<f32>(x0, y0), -1.0);
-    let clusterMaxFar  = screenToViewSpace(vec2<f32>(x1, y1),  1.0);
+    let clusterMinNear = screenToViewSpace(vec2<f32>(x0, y0), 0.0);
+    let clusterMaxFar  = screenToViewSpace(vec2<f32>(x1, y1),  0.0);
+
+    let eye = vec3f(0, 0, 0);
+    let minPointNear = lineIntersectionPlane(eye, clusterMinNear, zNear);
+    let minPointFar  = lineIntersectionPlane(eye, clusterMinNear, zFar);
+    let maxPointNear = lineIntersectionPlane(eye, clusterMaxFar,  zNear);
+    let maxPointFar  = lineIntersectionPlane(eye, clusterMaxFar,  zFar);
 
     let minBBox = vec3<f32>(
         min(clusterMinNear.x, clusterMaxFar.x),
@@ -70,6 +83,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         max(clusterMinNear.y, clusterMaxFar.y),
         max(zNear, zFar)
     );
+
+    //let minBBox = min(min(minPointNear, minPointFar), min(maxPointNear, maxPointFar));
+    //let maxBBox = max(max(minPointNear, minPointFar), max(maxPointNear, maxPointFar));
 
     // Assign lights to this cluster
     var counter: u32 = 0u;
@@ -88,6 +104,4 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     clusterSet.clusters[clusterIdx].numLights = counter;
-    clusterSet.clusters[clusterIdx].minAABB = minBBox;
-    clusterSet.clusters[clusterIdx].maxAABB = maxBBox;
 }

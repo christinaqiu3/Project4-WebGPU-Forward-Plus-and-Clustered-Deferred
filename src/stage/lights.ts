@@ -13,7 +13,7 @@ function hueToRgb(h: number) {
 export class Lights {
     private camera: Camera;
 
-    numLights = 500;
+    numLights = 5000;
     static readonly maxNumLights = 5000;
     static readonly numFloatsPerLight = 8; // vec3f is aligned at 16 byte boundaries
 
@@ -101,12 +101,13 @@ export class Lights {
         const maxLights = shaders.constants.maxLightsPerCluster;
 
         const numClusters = shaders.constants.numClustersX * shaders.constants.numClustersY * shaders.constants.numClustersZ;
-        const clusterStructSize = 16 + 16 + 16 + 4 * maxLights; // numLights (4) + padding (4) + lightIndices (4 * maxLightsPerCluster)
-        const clusterBufferSize = numClusters *  Math.ceil(clusterStructSize / 16) * 16; // + 16 is for numClusters u32 + padding
+        // numLights (4) + padding (4) + lightIndices (4 * maxLightsPerCluster)
+        const clusterStructSize = 16 + 4 * maxLights; 
+        const clusterBufferSize = numClusters * clusterStructSize;//*  Math.ceil(clusterStructSize / 16) * 16; // + 16 is for numClusters u32 + padding
 
         this.clusterBuffer = device.createBuffer({
             label: "cluster buffer",
-            size: clusterBufferSize,
+            size: 16 + clusterBufferSize,
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC
         });
 

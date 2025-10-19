@@ -12,8 +12,7 @@ struct FragmentInput
 {
     @location(0) pos: vec3f,
     @location(1) nor: vec3f,
-    @location(2) uv: vec2f,
-    @location(3) fragCoord: vec4f
+    @location(2) uv: vec2f
 }
 
 // ------------------------------------
@@ -50,20 +49,30 @@ fn main(in: FragmentInput) -> @location(0) vec4f
     // Compute cluster indices
     let cx = u32(clamp((ndcPos.x + 1.0) * 0.5 * f32(clusterX), 0.0, f32(clusterX - 1u)));
     let cy = u32(clamp((ndcPos.y + 1.0) * 0.5 * f32(clusterY), 0.0, f32(clusterY - 1u)));
-    let cz = u32(clamp(log(abs(viewPos.z) / cameraUniforms.nearPlane) / log(cameraUniforms.farPlane / cameraUniforms.nearPlane) * f32(clusterZ), 0.0, f32(clusterZ - 1u)));
+    let cz = u32(clamp(log((-viewPos.z) / cameraUniforms.nearPlane) / log(cameraUniforms.farPlane / cameraUniforms.nearPlane) * f32(clusterZ), 0.0, f32(clusterZ - 1u)));
 
     let clusterIndex = cx + cy * clusterX + cz * clusterX * clusterY;
 
     // todo print the z slice to see if increasing
+    let numTemp = f32(clusterSet.clusters[clusterIndex].numLights) / f32(${maxLightsPerCluster});
+
+
+// DEBUGGING
+    let x = f32(cx) / f32(${numClustersX});
+    let y = f32(cy) / f32(${numClustersY});
+    let z = f32(cz) / f32(${numClustersZ});
+
+    //return vec4<f32>(0., 0., z, 1.0);
+    // DEBUGGING
+
+    //return vec4f(numTemp, numTemp, numTemp, 1f);
 
     // Retrieve cluster data
-    let cluster = clusterSet.clusters[clusterIndex];
-    let numLightsInCluster = cluster.numLights;
 
     var totalLightContrib = vec3f(0, 0, 0);
     let nor = normalize(in.nor);
-    for (var i: u32 = 0u; i < numLightsInCluster; i = i + 1u) {
-        let lightIdx = cluster.lightIndices[i];
+    for (var i: u32 = 0u; i < clusterSet.clusters[clusterIndex].numLights; i = i + 1u) {
+        let lightIdx = clusterSet.clusters[clusterIndex].lightIndices[i];
         let light = lightSet.lights[lightIdx];
         totalLightContrib += calculateLightContrib(light, in.pos, nor);
     }
@@ -72,6 +81,7 @@ fn main(in: FragmentInput) -> @location(0) vec4f
 
     // return vec4<f32>(vec3<f32>(brightness), 1.0);
 
+let temp = -2.f * f32(cz) / f32(clusterZ);
     var finalColor = diffuseColor.rgb * totalLightContrib;
     return vec4(finalColor, 1);
 }

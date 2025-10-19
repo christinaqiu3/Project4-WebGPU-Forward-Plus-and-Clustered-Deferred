@@ -11,13 +11,13 @@
 @group (1) @binding(2) var albedoTexture: texture_2d<f32>;
 
 @fragment
-fn main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
-    let uv = fragCoord.xy / cameraUniforms.canvasResolution;
+fn main(@builtin(position) fragPos: vec4<f32>) -> @location(0) vec4<f32> {
+    let uv = fragPos.xy / cameraUniforms.canvasResolution;
 
     // Fetch G-buffer data
-    let worldPos = textureLoad(positionTexture, vec2<i32>(fragCoord.xy), 0).xyz;
-    let normal = normalize(textureLoad(normalTexture, vec2<i32>(fragCoord.xy), 0).xyz);
-    let albedo = textureLoad(albedoTexture, vec2<i32>(fragCoord.xy), 0);
+    let worldPos = textureLoad(positionTexture, vec2<i32>(fragPos.xy), 0).xyz;
+    let normal = normalize(textureLoad(normalTexture, vec2<i32>(fragPos.xy), 0).xyz);
+    let albedo = textureLoad(albedoTexture, vec2<i32>(fragPos.xy), 0);
 
     // Determine cluster index
     let clusterDims = vec3<u32>(${numClustersX}, ${numClustersY}, ${numClustersZ});
