@@ -162,51 +162,7 @@ export class Lights {
             }
         });
 
-        // DEBUGGING
-async function readClusterCounts(device: GPUDevice, queue: GPUQueue, clusterBuffer: GPUBuffer) {
-  // read the first N bytes (cap reasonably)
-  const readBytes = Math.min(clusterBufferSize, 1024); // inspect first 1KB
-  const readback = device.createBuffer({
-    size: readBytes,
-    usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
-  });
-
-  // Encode copy and submit
-  const enc = device.createCommandEncoder();
-  enc.copyBufferToBuffer(clusterBuffer, 0, readback, 0, readBytes);
-  queue.submit([enc.finish()]);
-
-  // wait for GPU to finish work
-  await queue.onSubmittedWorkDone();
-
-  // map and read
-  await readback.mapAsync(GPUMapMode.READ);
-  const mapped = readback.getMappedRange();
-
-  // print raw bytes (first 64)
-  const u8 = new Uint8Array(mapped);
-  const u32 = new Uint32Array(mapped);
-
-  console.log("raw bytes (first 64):", Array.from(u8.slice(0,64)).map(b=>b.toString(16).padStart(2,'0')).join(' '));
-  console.log("u32 view (first 16):", Array.from(u32.slice(0,16)));
-
-  // Interpret clusters assuming layout:
-  // per-cluster bytes: 16 (numLights + padding) + 16 (minAABB) + 16 (maxAABB) + 4*maxLights
-  const clustersToInspect = Math.min(8, Math.floor(readBytes / clusterBufferSize));
-  console.log("clustersToInspect:", clustersToInspect);
-  for (let i = 0; i < clustersToInspect; ++i) {
-    const baseByte = i * clusterBufferSize;
-    const baseU32 = baseByte / 4;
-    const numLights = u32[baseU32 + 0]; // first u32
-    // minAABB floats begin at float index baseU32 + 4
-    const minAABB = [new Float32Array(mapped, (baseByte + 16), 12).slice(0,3)]; // careful: typed view creation
-    console.log(`cluster ${i}: baseByte=${baseByte} numLights=${numLights}`);
-  }
-
-  readback.unmap();
-}
-readClusterCounts(device, device.queue, this.clusterBuffer);
-// DEBUGGING
+        
     }
 
     private populateLightsBuffer() {

@@ -27,6 +27,7 @@ export const constants = {
     bindGroup_scene: 0,
     bindGroup_model: 1,
     bindGroup_material: 2,
+    bindGroup_textures: 1,
 
     moveLightsWorkgroupSize: 128,
 
@@ -36,7 +37,7 @@ export const constants = {
     numClustersY: 9,
     numClustersZ: 24,
 
-    maxLightsPerCluster: 512
+    maxLightsPerCluster: 1024
 };
 
 // =================================
